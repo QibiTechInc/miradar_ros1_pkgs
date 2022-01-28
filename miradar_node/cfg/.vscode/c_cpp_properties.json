@@ -1,0 +1,19 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "",
+        "limitSymbolsToIncludedHeaders": true
+      },
+      "includePath": [
+        "/home/qibitech/catkin_ws/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/home/qibitech/catkin_ws/src/max30100_heart_node/include/**",
+        "/home/qibitech/catkin_ws/src/miradar_node/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS"
+    }
+  ],
+  "version": 4
+}

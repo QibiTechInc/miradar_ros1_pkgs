@@ -1,0 +1,11 @@
+
+<launch>
+  <node pkg="miradar_node" name="miradar_node" type="miradar_node" output="screen">
+    <param name="devicename" value="/dev/ttyUSB0" />
+  </node>
+  <node pkg="miradar_node" name="ppi_visualizer" type="ppi_visualizer.py" />
+  <node pkg="tf" name="tf_publisher" type="static_transform_publisher" args="0 0 0 0 0 0 map miradar 10" />
+  <node pkg="tf" name="tf_publisher_scan" type="static_transform_publisher" args="0 0 0 0 0 0 miradar miradar_scan 10" />
+  <node pkg="rviz" name="rviz" type="rviz" args="-d $(find miradar_node)/rviz/miradar.rviz" />
+  <node pkg="rqt_reconfigure" name="rqt_reconfigure" type="rqt_reconfigure" />
+</launch>

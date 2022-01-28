@@ -1,0 +1,7 @@
+<launch>
+  <node pkg="miradar_node" name="miradar_node" type="miradar_node" output="screen">
+    <!-- COM x = /dev/ttySx in WSL1, WSL2 serial support BAD -->
+    <param name="devicename" value="/dev/ttyS7" />
+  </node>
+  <node pkg="miradar_node" name="ppi_visualizer" type="ppi_visualizer.py" />
+</launch>
