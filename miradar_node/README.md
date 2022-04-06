@@ -1,15 +1,10 @@
 # miradar_node
-[![Build Status](http://localhost:8080/job/miradar_node_ros1/badge/icon)](http://localhost:8080/job/miradar_node_ros1/)
 
-ROS Node for miradar12e.
+
+ROS Node for miradar12e new firmware.
 Parameters are available to set via dynamic_reconfigure.
 CI is done in local jenkins environment.
-
-## Tests
-- [x] Lv1 : Library Unit Test : DONE
-- [ ] Lv2 : ROS Node Unit Test : Skipping due to complexity of DI Implementation
-- [x] Lv3 : ROS Node Test Integration Test : 60%
-- [x] Lv4 : Feature Test : DONE
+It only supports 224000bps currently.
 
 
 ## Launch
