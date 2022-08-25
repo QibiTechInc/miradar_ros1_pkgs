@@ -135,17 +135,38 @@ public:
     char sRxBuf[65516];
     std::vector<uint8_t> map;
     int sensorState = 0;
-    char sCmd[9] = {'A', ',', '0', ',', '2', ',', '0', 0x0d, 0x0a};
+    char sCmd[32];
+    //char sCmd[9] = {'A', ',', '0', ',', '2', ',', '0', 0x0d, 0x0a};       // original
 
     void setSensorState(int state) {
-        if (state <= 2 && state >= 0) {
-            sCmd[4] = '0' + state;
-            sensorState = state;
+        switch(state) {                                                     // ST modified 2022_0705
+            case 1:
+                sprintf(sCmd, "START_PPI%c%c", 0x0d, 0x0a);
+                sensorState = state;
+                break;
+            case 2:
+                sprintf(sCmd, "START_MAP%c%c", 0x0d, 0x0a);
+                sensorState = state;
+                break;
+            case 0:
+                sprintf(sCmd, "B290_STOP%c%c", 0x0d, 0x0a);
+                sensorState = state;
+                break;
+            default:
+                break;
         }
+
+        //if (state <= 2 && state >= 0) {                                   // original
+        //    sCmd[4] = '0' + state;
+        //    sensorState = state;
+        //}
     }
 
     void sendSensorMode() {
-        comm.CommTx(sCmd, sizeof(sCmd));
+        int nTxLen;
+
+        nTxLen = strlen(sCmd);
+        comm.CommTx(sCmd, nTxLen);
         comm.CommRx(sRxBuf, sizeof(sRxBuf));
     }
 
@@ -196,25 +217,26 @@ public:
         if (sensorState == 1) {
             ppiEntries.clear();
 
-            if (receivedBytes.find("M,1") != -1 ||
-                receivedBytes.find("M,0") != -1) {
+            if (receivedBytes.find("BEGIN_PPI,1") != -1 ||
+                receivedBytes.find("BEGIN_PPI,0") != -1) {
                 std::vector<std::string> metadata = split(receivedBytes, ',');
-                int entrynumbers = (metadata.size()) / 4;
+                int entrynumbers = ((metadata.size()) - 1) /  4;
                 if (entrynumbers > 2) {
                     metadata.erase(metadata.begin());
                     metadata.erase(metadata.begin());
                 }
-                entrynumbers = (metadata.size()) / 4;
+                entrynumbers = ((metadata.size()) - 1) / 4;
 
                 for (int j = 0; j < entrynumbers; j++) {
-                    if (std::stoi(metadata[4 * j]) != 0 ||
+                    if (std::stoi(metadata[4 * j + 0]) != 0 ||
                         std::stoi(metadata[4 * j + 1]) != 0 ||
-                        std::stoi(metadata[4 * j + 2]) != 0) {
+                        std::stoi(metadata[4 * j + 2]) != 0 ||
+                        std::stoi(metadata[4 * j + 3]) != 0) {
                         PPIData ppidata;
-                        ppidata.distance = std::stoi(metadata[4 * j]);
-                        ppidata.angle = std::stoi(metadata[4 * j + 1]);
-                        ppidata.speed = std::stoi(metadata[4 * j + 2]);
-                        ppidata.db = std::stoi(metadata[4 * j + 3]);
+                        ppidata.distance = std::stoi(metadata[4 * j + 0]);
+                        ppidata.angle    = std::stoi(metadata[4 * j + 1]);
+                        ppidata.speed    = std::stoi(metadata[4 * j + 2]);
+                        ppidata.db       = std::stoi(metadata[4 * j + 3]);
                         ppiEntries.push_back(ppidata);
 
                         std::cout << "distance : " << ppidata.distance
@@ -226,9 +248,9 @@ public:
                 }
             }
         } else if (sensorState == 2) {
-            if (receivedBytes.find("BEGIN_MAP_") != -1) {
+            if (receivedBytes.find("BEGIN_MAP,") != -1) {
                 map.clear();
-                int endIndex = receivedBytes.find("END_MAP");
+                int endIndex = receivedBytes.find(",END_MAP");
                 if (endIndex != -1) {
                     std::string mapStr =
                         receivedBytes.substr(18, endIndex - 18);

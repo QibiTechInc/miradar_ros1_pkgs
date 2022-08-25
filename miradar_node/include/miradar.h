@@ -28,7 +28,7 @@ struct PPIData {
 struct MiRadarParam {
     explicit MiRadarParam()
         : minDistance(300),
-          maxDistance(3000),
+          maxDistance(3500),
           alarmDistance(0),
           nDistance(64),
           nAngle(45),
@@ -176,7 +176,7 @@ public:
     char sCmd[9] = {'A', ',', '0', ',', '1', ',', '0', 0x0d, 0x0a};
 
     explicit MiRadar() : sensorState(1) {
-        radarParam.maxDistance = 3000;
+        radarParam.maxDistance = 4000;
         radarParam.minDistance = 300;
         radarParam.nDistance = 64;
         radarParam.alarmDistance = 1000;
@@ -184,7 +184,7 @@ public:
         radarParam.nAngle = 45;
         radarParam.txPower = -7;
         radarParam.hpfGain = 1;
-        radarParam.pgaGain = 1;
+        radarParam.pgaGain = 1; 
         radarParam.maxDb = -20;
         radarParam.minDb = -40;
         radarParam.duration = 200;
@@ -202,15 +202,16 @@ public:
     }
 
     void sendSensorMode() {
-        comm.CommTx(sCmd, sizeof(sCmd));
-        comm.CommRx(sRxBuf, sizeof(sRxBuf));
+        //comm.CommTx(sCmd, sizeof(sCmd));                  // ST 2022_0704
+        //comm.CommRx(sRxBuf, sizeof(sRxBuf));
     }
 
     void stopCommunication() {
-        std::string stopCommand = "A,0,0";
+        std::string stopCommand = "B290_STOP";              // ST 2022_0704
+        //std::string stopCommand = "A,0,0";                // original
         stopCommand.push_back(static_cast<char>(CR));
         stopCommand.push_back(static_cast<char>(LF));
-        comm.CommTx(&stopCommand[0], sizeof(stopCommand.c_str()));
+        comm.CommTx(&stopCommand[0], static_cast<int>(strlen(stopCommand.c_str())));
         comm.CommRx(sRxBuf, sizeof(sRxBuf));
     }
 
@@ -304,6 +305,15 @@ public:
         nAng = ((maxAngle * 2) % ((nAng - 1)) != 0) ? maxAngle * 2 + 1 : nAng;
     }
 
+    void validateDuration(int& nDuration) {
+        if(nDuration<100) {
+            nDuration = 100;
+        }
+        if(3000<nDuration) {
+            nDuration = 3000;
+        }
+    }
+
     void validateParam(MiRadarParam& param) {
         validateNDistance(param.nDistance);
         validateDistance(param.minDistance, param.maxDistance, param.nDistance);
@@ -314,13 +324,14 @@ public:
         validateHPF(param.hpfGain);
         validatePGA(param.pgaGain);
         validateNAngle(param.nAngle, param.maxAngle);
-        param.duration = calcDuration(param.nAngle, param.nDistance);
+        validateDuration(param.duration);
+        //param.duration = calcDuration(param.nAngle, param.nDistance);
     }
 
     std::string generateParamCommand(MiRadarParam& param) {
         std::string sensorStateStr =
-            (sensorState == 0) ? "17" : std::to_string(sensorState + 0x10);
-        std::string paramCommand = "A,0," + sensorStateStr + ",";
+            (sensorState == 1) ? "PPI" : "MAP";                                         // ST 2022_0704
+        std::string paramCommand = "START_" + sensorStateStr + ",";                     // compatible ID with ST sample software
         paramCommand += std::to_string(param.maxDistance) + ",";
         paramCommand += std::to_string(param.minDistance) + ",";
         paramCommand += std::to_string(param.alarmDistance) + ",";
@@ -338,10 +349,26 @@ public:
     }
 
     void setParam(MiRadarParam param) {
-        if (prevState != sensorState) {
-            setSensorState(sensorState);
-            sendSensorMode();
+        static int nLocalPrevState = -1;
+        if (nLocalPrevState==sensorState) {
+            return;
         }
+        nLocalPrevState = sensorState;
+        setSensorState(sensorState);
+        if(sensorState==0) {
+            stopCommunication();
+            return;
+        }
+
+        //---------------- ST 2022_0629 added average option
+        char sTxBuf[32];
+        int nLen;
+        sprintf(sTxBuf, "AVERAGE,4%c%c", 0x0d, 0x0a);
+        nLen = strlen(sTxBuf);
+        comm.CommTx(sTxBuf, nLen);
+        comm.CommRx(sRxBuf, sizeof(sRxBuf));
+        usleep(100000);
+        //--------------------------------------------------
 
         validateParam(param);
 
@@ -370,29 +397,34 @@ public:
     char* getReceivedBuffer() { return sRxBuf; }
 
     void generatePPI(std::string& receivedBytes) {
+
         ppiEntries.clear();
 
-        if (receivedBytes.find("M,1") != -1 ||
-            receivedBytes.find("M,0") != -1) {
+        if (receivedBytes.find("BEGIN_PPI,1") != -1 ||                                      // ST 2022_0704
+            receivedBytes.find("BEGIN_PPI,0") != -1) {
             std::vector<std::string> metadata = split(receivedBytes, ',');
-            int entrynumbers = (metadata.size()) / 4;
-            if (entrynumbers > 2) {
+
+            int entrynumbers = ((metadata.size()) - 1) / 4;
+            if (entrynumbers > 1) {
                 metadata.erase(metadata.begin());
                 metadata.erase(metadata.begin());
             }
-            entrynumbers = (metadata.size()) / 4;
+            entrynumbers = ((metadata.size()) - 1) / 4;
+            if(entrynumbers!=8) {
+                return;
+            }
 
             for (int j = 0; j < entrynumbers; j++) {
-                bool isNotEmpty = (std::stoi(metadata[4 * j]) |
+                bool isNotEmpty = (std::stoi(metadata[4 * j + 0]) |
                                    std::stoi(metadata[4 * j + 1]) |
                                    std::stoi(metadata[4 * j + 2]) |
                                    std::stoi(metadata[4 * j + 3])) != 0;
                 if (isNotEmpty) {
                     PPIData ppidata;
-                    ppidata.distance = std::stoi(metadata[4 * j]);
-                    ppidata.angle = std::stoi(metadata[4 * j + 1]);
-                    ppidata.speed = std::stoi(metadata[4 * j + 2]);
-                    ppidata.db = std::stoi(metadata[4 * j + 3]);
+                    ppidata.distance = std::stoi(metadata[4 * j + 0]);
+                    ppidata.angle    = std::stoi(metadata[4 * j + 1]);
+                    ppidata.speed    = std::stoi(metadata[4 * j + 2]);
+                    ppidata.db       = std::stoi(metadata[4 * j + 3]);
                     ppiEntries.push_back(ppidata);
                 }
             }
@@ -400,9 +432,9 @@ public:
     }
 
     void generateMap(std::string& receivedBytes) {
-        if (receivedBytes.find("BEGIN_MAP_") != -1) {
+        if (receivedBytes.find("BEGIN_MAP,") != -1) {
             map.clear();
-            int endIndex = receivedBytes.find("END_MAP");
+            int endIndex = receivedBytes.find(",END_MAP");
             if (endIndex != -1) {
                 std::string mapStr = receivedBytes.substr(18, endIndex - 18);
                 std::string header = receivedBytes.substr(0, 18);
