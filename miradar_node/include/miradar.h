@@ -73,7 +73,7 @@ public:
     void setupSerial() {
         struct termios tio;
         bzero((void*)&tio, (size_t)(sizeof(tio)));
-        tio.c_cflag = B921600 | CS8 | CLOCAL | CREAD;
+        tio.c_cflag = B230400 | CS8 | CLOCAL | CREAD;
         tio.c_iflag = IGNPAR;
         tio.c_oflag = 0;
         tio.c_lflag = 0;
