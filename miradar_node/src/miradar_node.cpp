@@ -46,7 +46,7 @@ public:
     }
 
     explicit MiRadarROS(ros::Rate& rate, ros::NodeHandle& pa)
-        : sensorMode(1),
+        : sensorMode(0),
           loopRate(rate),
           param(pa),
           isConfigUpdate(false),
@@ -238,6 +238,13 @@ public:
                 ppidata.data.push_back(ppi);
             }
             pub.publish(ppidata);
+        }
+        else {
+            //---------------- 2022_0704 by ST
+            //      Erase marker if no rx data
+            visualization_msgs::Marker marker;
+            marker.action = visualization_msgs::Marker::DELETEALL;
+            pub.publish(marker);
         }
     }
 
